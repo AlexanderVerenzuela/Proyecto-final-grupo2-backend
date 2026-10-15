@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asiste+ | Portal Administrativo Cibertec</title>
+  <meta name="description" content="Sistema de control de asistencia para el curso de Desarrollo de Aplicaciones Móviles I - Cibertec">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Barra Lateral (Sidebar) -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <polyline points="16 11 18 13 22 9"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Asiste<span>+</span></h1>
+          <p class="brand-subtitle">Cibertec Móviles I</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboard" id="nav-dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9"></rect>
+            <rect x="14" y="3" width="7" height="5"></rect>
+            <rect x="14" y="12" width="7" height="9"></rect>
+            <rect x="3" y="16" width="7" height="5"></rect>
+          </svg>
+          <span>Dashboard</span>
+        </button>
+
+        <button class="nav-item" data-view="asistencias" id="nav-asistencias">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          <span>Asistencias</span>
+        </button>
+
+        <button class="nav-item" data-view="alumnos" id="nav-alumnos">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+          </svg>
+          <span>Estudiantes</span>
+        </button>
+
+        <button class="nav-item" data-view="cursos" id="nav-cursos">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span>Cursos</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="server-badge" id="server-status-badge">
+          <span class="status-dot"></span>
+          <span id="server-status-text">Conectando...</span>
+        </div>
+        <p class="copyright">DAM I &bull; Grupo 2 &bull; 2026</p>
+      </div>
+    </aside>
+
+    <!-- Contenedor Principal -->
+    <main class="main-content">
+      <!-- Barra Superior -->
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="page-title">Panel de Control</h2>
+          <p id="page-subtitle">Resumen general y métricas en tiempo real</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="btn-refresh" title="Actualizar datos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Actualizar</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VISTA: DASHBOARD -->
+      <section class="view active" id="view-dashboard">
+        <!-- Tarjetas de Métricas -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-title">Total Estudiantes</span>
+              <span class="metric-icon icon-blue">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              </span>
+            </div>
+            <div class="metric-value" id="stat-alumnos">--</div>
+            <div class="metric-foot" id="stat-alumnos-activos">Cargando...</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-title">Cursos Activos</span>
+              <span class="metric-icon icon-indigo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              </span>
+            </div>
+            <div class="metric-value" id="stat-cursos">--</div>
+            <div class="metric-foot">Asignaturas registradas</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-title">Asistencias Totales</span>
+              <span class="metric-icon icon-emerald">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </span>
+            </div>
+            <div class="metric-value" id="stat-asistencias">--</div>
+            <div class="metric-foot" id="stat-tasa">Tasa de puntualidad</div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-header">
+              <span class="metric-title">Distribución</span>
+              <span class="metric-icon icon-amber">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+              </span>
+            </div>
+            <div class="metric-breakdown">
+              <span class="badge badge-presente" id="stat-presentes">0 Presentes</span>
+              <span class="badge badge-tardanza" id="stat-tardanzas">0 Tardanzas</span>
+              <span class="badge badge-ausente" id="stat-ausentes">0 Ausentes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección de Estadísticas por Curso -->
+        <div class="dashboard-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Asistencias por Curso</h3>
+              <span class="card-subtitle">Desglose de estados por asignatura</span>
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table class="table" id="table-stats-cursos">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nombre del Curso</th>
+                      <th>Presentes</th>
+                      <th>Tardanzas</th>
+                      <th>Ausentes</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td colspan="6" class="text-center text-muted">Cargando datos...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Últimas Asistencias Registradas</h3>
+              <button class="btn btn-sm btn-outline" id="btn-ver-todas-asistencias">Ver todas</button>
+            </div>
+            <div class="card-body">
+              <div class="table-container">
+                <table class="table" id="table-ultimas-asistencias">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Estudiante</th>
+                      <th>Curso</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td colspan="4" class="text-center text-muted">Cargando datos...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA: ASISTENCIAS -->
+      <section class="view" id="view-asistencias">
+        <div class="card">
+          <div class="card-header filter-header">
+            <div>
+              <h3 class="card-title">Gestión de Asistencias</h3>
+              <p class="card-subtitle">Filtra, crea, edita y administra los registros de asistencia</p>
+            </div>
+            <button class="btn btn-primary" id="btn-nueva-asistencia">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Registrar Asistencia</span>
+            </button>
+          </div>
+
+          <!-- Filtros de Asistencias -->
+          <div class="filters-bar">
+            <div class="form-group filter-input">
+              <label for="filter-curso">Curso:</label>
+              <select id="filter-curso" class="form-control">
+                <option value="">Todos los cursos</option>
+              </select>
+            </div>
+
+            <div class="form-group filter-input">
+              <label for="filter-estado">Estado:</label>
+              <select id="filter-estado" class="form-control">
+                <option value="">Todos</option>
+                <option value="PRESENTE">Presente</option>
+                <option value="TARDANZA">Tardanza</option>
+                <option value="AUSENTE">Ausente</option>
+              </select>
+            </div>
+
+            <div class="form-group filter-input">
+              <label for="filter-fecha">Fecha:</label>
+              <input type="date" id="filter-fecha" class="form-control">
+            </div>
+
+            <div class="form-group filter-search">
+              <label for="filter-buscar">Buscar:</label>
+              <input type="text" id="filter-buscar" class="form-control" placeholder="Nombre o código...">
+            </div>
+
+            <div class="filter-actions">
+              <button class="btn btn-secondary" id="btn-limpiar-filtros">Limpiar</button>
+            </div>
+          </div>
+
+          <!-- Tabla de Asistencias -->
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table" id="table-asistencias">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Fecha</th>
+                    <th>Código</th>
+                    <th>Estudiante</th>
+                    <th>Curso</th>
+                    <th>Estado</th>
+                    <th>Observación</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-asistencias">
+                  <tr><td colspan="8" class="text-center text-muted">Cargando registros...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span id="asistencias-count">Mostrando 0 registros</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA: ESTUDIANTES -->
+      <section class="view" id="view-alumnos">
+        <div class="card">
+          <div class="card-header filter-header">
+            <div>
+              <h3 class="card-title">Mantenimiento de Estudiantes</h3>
+              <p class="card-subtitle">Administra los alumnos registrados en el sistema académico</p>
+            </div>
+            <button class="btn btn-primary" id="btn-nuevo-alumno">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Nuevo Estudiante</span>
+            </button>
+          </div>
+
+          <div class="filters-bar">
+            <div class="form-group filter-search" style="flex: 1;">
+              <input type="text" id="filter-alumno-buscar" class="form-control" placeholder="Buscar por código, nombres o apellidos...">
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table" id="table-alumnos">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Apellidos y Nombres</th>
+                    <th>Correo Institucional</th>
+                    <th>Teléfono</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-alumnos">
+                  <tr><td colspan="7" class="text-center text-muted">Cargando alumnos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA: CURSOS -->
+      <section class="view" id="view-cursos">
+        <div class="card">
+          <div class="card-header filter-header">
+            <div>
+              <h3 class="card-title">Mantenimiento de Cursos</h3>
+              <p class="card-subtitle">Gestión de cursos y asignaturas habilitadas</p>
+            </div>
+            <button class="btn btn-primary" id="btn-nuevo-curso">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Nuevo Curso</span>
+            </button>
+          </div>
+
+          <div class="card-body">
+            <div class="table-container">
+              <table class="table" id="table-cursos">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Nombre del Curso</th>
+                    <th>Docente</th>
+                    <th>Sección</th>
+                    <th>Ciclo</th>
+                    <th>Créditos</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-cursos">
+                  <tr><td colspan="8" class="text-center text-muted">Cargando cursos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: REGISTRAR / EDITAR ASISTENCIA -->
+  <div class="modal" id="modal-asistencia">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-asistencia-title">Registrar Asistencia</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <form id="form-asistencia">
+          <input type="hidden" id="asistencia-id">
+          <div class="modal-body">
+            <div class="form-group" id="group-curso">
+              <label for="asistencia-curso">Curso *</label>
+              <select id="asistencia-curso" class="form-control" required>
+                <option value="">Seleccione un curso...</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="group-alumno">
+              <label for="asistencia-alumno">Estudiante *</label>
+              <select id="asistencia-alumno" class="form-control" required>
+                <option value="">Seleccione un estudiante...</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="asistencia-fecha">Fecha de Clase *</label>
+              <input type="date" id="asistencia-fecha" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+              <label>Estado de Asistencia *</label>
+              <div class="radio-cards">
+                <label class="radio-card radio-card-presente">
+                  <input type="radio" name="asistencia-estado" value="PRESENTE" checked>
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">Presente</span>
+                </label>
+                <label class="radio-card radio-card-tardanza">
+                  <input type="radio" name="asistencia-estado" value="TARDANZA">
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">Tardanza</span>
+                </label>
+                <label class="radio-card radio-card-ausente">
+                  <input type="radio" name="asistencia-estado" value="AUSENTE">
+                  <span class="radio-indicator"></span>
+                  <span class="radio-text">Ausente</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="asistencia-observacion">Observación (opcional)</label>
+              <textarea id="asistencia-observacion" class="form-control" rows="2" placeholder="Ej: Justificación, demora por transporte, etc."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-asistencia">Guardar Registro</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ESTUDIANTE -->
+  <div class="modal" id="modal-alumno">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-alumno-title">Nuevo Estudiante</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <form id="form-alumno">
+          <input type="hidden" id="alumno-id">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="alumno-codigo">Código del Alumno *</label>
+              <input type="text" id="alumno-codigo" class="form-control" placeholder="Ej: I20231010" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group col">
+                <label for="alumno-nombres">Nombres *</label>
+                <input type="text" id="alumno-nombres" class="form-control" placeholder="Ej: Juan Carlos" required>
+              </div>
+              <div class="form-group col">
+                <label for="alumno-apellidos">Apellidos *</label>
+                <input type="text" id="alumno-apellidos" class="form-control" placeholder="Ej: Pérez Ramos" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="alumno-correo">Correo Institucional *</label>
+              <input type="email" id="alumno-correo" class="form-control" placeholder="alumno@cibertec.edu.pe" required>
+            </div>
+            <div class="form-group">
+              <label for="alumno-telefono">Teléfono</label>
+              <input type="text" id="alumno-telefono" class="form-control" placeholder="Ej: 987654321">
+            </div>
+            <div class="form-group" id="group-alumno-activo">
+              <label class="checkbox-label">
+                <input type="checkbox" id="alumno-activo" checked>
+                <span>Estudiante Activo</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Estudiante</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CURSO -->
+  <div class="modal" id="modal-curso">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-curso-title">Nuevo Curso</h3>
+          <button class="btn-close" data-close-modal>&times;</button>
+        </div>
+        <form id="form-curso">
+          <input type="hidden" id="curso-id">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group col">
+                <label for="curso-codigo">Código *</label>
+                <input type="text" id="curso-codigo" class="form-control" placeholder="Ej: DAM-501" required>
+              </div>
+              <div class="form-group col">
+                <label for="curso-creditos">Créditos</label>
+                <input type="number" id="curso-creditos" class="form-control" value="4" min="1" max="10">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="curso-nombre">Nombre de la Asignatura *</label>
+              <input type="text" id="curso-nombre" class="form-control" placeholder="Ej: Desarrollo de Aplicaciones Móviles I" required>
+            </div>
+            <div class="form-group">
+              <label for="curso-docente">Docente Asignado *</label>
+              <input type="text" id="curso-docente" class="form-control" placeholder="Ej: Mg. Carlos Mendoza" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group col">
+                <label for="curso-seccion">Sección</label>
+                <input type="text" id="curso-seccion" class="form-control" value="T5BN">
+              </div>
+              <div class="form-group col">
+                <label for="curso-ciclo">Ciclo</label>
+                <input type="text" id="curso-ciclo" class="form-control" value="V">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close-modal>Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar Curso</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST / NOTIFICACIONES -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
