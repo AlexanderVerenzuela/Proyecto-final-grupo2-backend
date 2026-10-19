@@ -560,18 +560,19 @@ router.post('/sincronizar', async (req, res) => {
       } = item;
       const alumnoId = normalizarId(alumno_id);
       const cursoId = normalizarId(curso_id);
-      const sesionId = normalizarId(sesion_id);
+      const asistenciaHistorica = sesion_id === undefined || sesion_id === null;
+      const sesionId = asistenciaHistorica ? null : normalizarId(sesion_id);
       const localIdValido = typeof local_id === 'number' &&
         Number.isSafeInteger(local_id) && local_id > 0;
       const estadoNorm = normalizarEstado(estado);
 
       if (!localIdValido || alumnoId === null || cursoId === null ||
-          sesionId === null || !fechaValida(fecha) || !estadoNorm ||
+          (!asistenciaHistorica && sesionId === null) || !fechaValida(fecha) || !estadoNorm ||
           (observacion !== undefined && observacion !== null && typeof observacion !== 'string')) {
         resultados.push({
           local_id,
           success: false,
-          message: 'Datos incompletos o inválidos. Se requiere sesion_id y una fecha válida.'
+          message: 'Datos incompletos o inválidos. La fecha debe ser válida y, si se envía, sesion_id debe ser un entero positivo.'
         });
         continue;
       }
@@ -599,6 +600,120 @@ router.post('/sincronizar', async (req, res) => {
       }
 
       try {
+        const observacionNorm = typeof observacion === 'string'
+          ? observacion.trim() || null
+          : null;
+
+        if (asistenciaHistorica) {
+          const historicaCheck = await db.query(
+            `SELECT
+               $2::DATE < CURRENT_DATE AS fecha_historica,
+               EXISTS (
+                 SELECT 1
+                 FROM sesiones_asistencia
+                 WHERE curso_id = $1 AND fecha = $2::DATE
+               ) AS existe_sesion`,
+            [cursoId, fecha]
+          );
+          if (!historicaCheck.rows[0].fecha_historica || historicaCheck.rows[0].existe_sesion) {
+            resultados.push({
+              local_id,
+              success: false,
+              message: 'No se puede sincronizar sin sesion_id: solo se admiten asistencias históricas anteriores a hoy y sin una sesión registrada para ese curso y fecha.'
+            });
+            continue;
+          }
+
+          if (remotoId !== null) {
+            resultados.push({
+              local_id,
+              success: false,
+              message: 'La asistencia histórica no tiene sesión y no puede modificarse en el servidor.'
+            });
+            continue;
+          }
+
+          const alumnoCheck = await db.query(
+            'SELECT id FROM alumnos WHERE id = $1',
+            [alumnoId]
+          );
+          if (alumnoCheck.rowCount === 0) {
+            resultados.push({
+              local_id,
+              success: false,
+              message: 'El alumno especificado no existe'
+            });
+            continue;
+          }
+
+          const cursoCheck = await db.query(
+            'SELECT id FROM cursos WHERE id = $1',
+            [cursoId]
+          );
+          if (cursoCheck.rowCount === 0) {
+            resultados.push({
+              local_id,
+              success: false,
+              message: 'El curso especificado no existe'
+            });
+            continue;
+          }
+
+          const resInsertHistorico = await db.query(
+            `INSERT INTO asistencias
+               (alumno_id, curso_id, sesion_id, fecha, estado, observacion, sincronizado)
+             VALUES ($1, $2, NULL, $3::DATE, $4, $5, TRUE)
+             ON CONFLICT (alumno_id, curso_id, fecha) WHERE sesion_id IS NULL DO NOTHING
+             RETURNING id, sesion_id, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha`,
+            [alumnoId, cursoId, fecha, estadoNorm, observacionNorm]
+          );
+
+          if (resInsertHistorico.rowCount === 0) {
+            const existenteResult = await db.query(
+              `SELECT id, estado, observacion, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha
+               FROM asistencias
+               WHERE alumno_id = $1
+                 AND curso_id = $2
+                 AND fecha = $3::DATE
+                 AND sesion_id IS NULL`,
+              [alumnoId, cursoId, fecha]
+            );
+            if (existenteResult.rowCount === 0) {
+              resultados.push({
+                local_id,
+                success: false,
+                message: 'No se pudo confirmar la asistencia histórica.'
+              });
+              continue;
+            }
+
+            const existente = existenteResult.rows[0];
+            const coincide = existente.estado === estadoNorm &&
+              (existente.observacion || null) === observacionNorm;
+            resultados.push({
+              local_id,
+              remoto_id: existente.id,
+              sesion_id: null,
+              fecha: existente.fecha,
+              success: coincide,
+              message: coincide
+                ? 'La asistencia histórica ya existía y coincide con el registro local.'
+                : 'Conflicto: la asistencia histórica ya existe con datos diferentes. No se sobrescribió.'
+            });
+            continue;
+          }
+
+          resultados.push({
+            local_id,
+            remoto_id: resInsertHistorico.rows[0].id,
+            sesion_id: null,
+            fecha: resInsertHistorico.rows[0].fecha,
+            success: true,
+            message: 'Asistencia histórica sincronizada correctamente'
+          });
+          continue;
+        }
+
         const sesionResult = await db.query(
           `SELECT id, inicio_at, fin_at
            FROM sesiones_asistencia
@@ -617,10 +732,6 @@ router.post('/sincronizar', async (req, res) => {
           });
           continue;
         }
-
-        const observacionNorm = typeof observacion === 'string'
-          ? observacion.trim() || null
-          : null;
 
         if (remotoId !== null) {
           const sesionActiva = await comprobarSesionActiva(sesionId, cursoId, fecha);

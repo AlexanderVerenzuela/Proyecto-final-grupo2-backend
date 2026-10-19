@@ -192,7 +192,7 @@ Elimina el registro de asistencia especificado si pertenece a una sesión activa
 - **HTTP 403:** La sesión está cerrada/vencida o la asistencia histórica no tiene sesión.
 
 ### `POST /api/asistencias/sincronizar` (Sincronización en Lote para Móvil)
-Recibe un arreglo con registros offline asociados a una sesión. Cada registro debe incluir `sesion_id` y `fecha_registro`; la hora de registro debe estar dentro del horario de esa sesión y coincidir con su curso y fecha. Las nuevas asistencias usan `ON CONFLICT (alumno_id, sesion_id) DO NOTHING`: una asistencia ya existente se confirma solo si sus datos coinciden, nunca se sobrescribe con datos distintos. Si se envía `remoto_id`, se trata como una modificación y solo se acepta con la sesión activa y si el registro remoto coincide.
+Recibe un arreglo con registros offline. Los registros nuevos requieren `sesion_id` y `fecha_registro`; la hora de registro debe estar dentro del horario de esa sesión y coincidir con su curso y fecha. Los registros históricos guardados antes de introducir sesiones pueden omitir `sesion_id`: se sincronizan con `sesion_id = NULL` sin asignarles una sesión. En ambos casos, los duplicados solo se confirman si coinciden exactamente; los datos diferentes no se sobrescriben. Si se envía `remoto_id`, la modificación solo se acepta con sesión activa y si el registro remoto coincide; registros históricos sin sesión no se modifican.
 
 **Body:**
 ```json
@@ -202,7 +202,6 @@ Recibe un arreglo con registros offline asociados a una sesión. Cada registro d
       "local_id": 101,
       "alumno_id": 1,
       "curso_id": 1,
-      "sesion_id": 3,
       "fecha": "2026-10-14",
       "fecha_registro": "2026-10-14T10:30:00.000Z",
       "estado": "PRESENTE",
@@ -231,7 +230,7 @@ Recibe un arreglo con registros offline asociados a una sesión. Cada registro d
 }
 ```
 
-`success` es `false` si uno o más elementos no pudieron sincronizarse. En ese caso, `items` conserva un resultado individual por entrada y los elementos válidos se procesan igualmente. Cada elemento requiere `local_id` positivo, identificadores positivos de alumno, curso y sesión, fecha válida `YYYY-MM-DD`, estado admitido y `fecha_registro` válida dentro del horario de la sesión. Si `items` falta, no es un arreglo o está vacío, la API responde HTTP 400.
+`success` es `false` si uno o más elementos no pudieron sincronizarse. En ese caso, `items` conserva un resultado individual por entrada y los elementos válidos se procesan igualmente. Cada elemento requiere `local_id` positivo, identificadores positivos de alumno y curso, fecha válida `YYYY-MM-DD`, estado admitido y `fecha_registro` válida; si incluye sesión, el identificador debe ser positivo y la fecha de registro debe estar en su horario. Si `items` falta, no es un arreglo o está vacío, la API responde HTTP 400.
 
 ---
 

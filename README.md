@@ -78,6 +78,11 @@ psql -U postgres -d asiste_plus -f "database/migrations/20261018_add_attendance_
 ```
 La migración conserva las asistencias históricas asignándoles `sesion_id = NULL`; estas no se pueden modificar ni eliminar mediante los endpoints que requieren una sesión activa.
 
+Para las instalaciones que ya aplicaron la migración de sesiones, aplica también el índice parcial que protege contra duplicados al sincronizar históricos sin sesión:
+```bash
+psql -U postgres -d asiste_plus -f "database/migrations/20261019_add_legacy_attendance_unique.sql"
+```
+
 ---
 
 ### 2. Configurar y Ejecutar el Servidor Backend

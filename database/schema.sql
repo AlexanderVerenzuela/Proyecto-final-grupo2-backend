@@ -84,6 +84,11 @@ CREATE TABLE asistencias (
     CONSTRAINT uq_asistencia_alumno_sesion UNIQUE (alumno_id, sesion_id)
 );
 
+-- Permite sincronizar históricos sin sesión y evita duplicados concurrentes.
+CREATE UNIQUE INDEX uq_asistencia_historica_alumno_curso_fecha
+    ON asistencias(alumno_id, curso_id, fecha)
+    WHERE sesion_id IS NULL;
+
 -- 6. Índices para optimizar búsquedas y reportes
 CREATE INDEX idx_asistencias_alumno ON asistencias(alumno_id);
 CREATE INDEX idx_asistencias_curso ON asistencias(curso_id);

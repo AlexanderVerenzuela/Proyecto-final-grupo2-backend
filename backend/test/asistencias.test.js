@@ -15,6 +15,7 @@ const sessionFixture = () => ({
 });
 
 const state = {
+  currentDate: '2026-10-14',
   alumnos: new Set([1]),
   cursos: new Set([1]),
   sesiones: new Map(),
@@ -40,6 +41,19 @@ const dbMock = {
     if (text.includes('FROM cursos WHERE id = $1')) {
       const exists = state.cursos.has(params[0]);
       return { rows: exists ? [{ id: params[0] }] : [], rowCount: exists ? 1 : 0 };
+    }
+    if (text.includes('SELECT') && text.includes('AS fecha_historica')) {
+      const [cursoId, fecha] = params;
+      const existeSesion = [...state.sesiones.values()].some(
+        (session) => session.curso_id === cursoId && session.fecha === fecha
+      );
+      return {
+        rows: [{
+          fecha_historica: fecha < state.currentDate,
+          existe_sesion: existeSesion,
+        }],
+        rowCount: 1,
+      };
     }
     if (text.includes('FROM sesiones_asistencia')) {
       const [sesionId, cursoId, fecha, registro] = params;
@@ -76,14 +90,27 @@ const dbMock = {
       );
       return { rows: row ? [{ ...row }] : [], rowCount: row ? 1 : 0 };
     }
-    if (text.includes('INSERT INTO asistencias')) {
-      const [alumno_id, curso_id, sesion_id, fecha, estadoValue, observacion] = params;
-      const existing = state.asistencias.find(
-        (row) => row.alumno_id === alumno_id && row.sesion_id === sesion_id
+    if (text.includes('FROM asistencias') && text.includes('sesion_id IS NULL')) {
+      const row = state.asistencias.find(
+        (item) => item.alumno_id === params[0] &&
+          item.curso_id === params[1] &&
+          item.fecha === params[2] &&
+          item.sesion_id === null
       );
+      return { rows: row ? [{ ...row }] : [], rowCount: row ? 1 : 0 };
+    }
+    if (text.includes('INSERT INTO asistencias')) {
+      const historical = text.includes('sesion_id IS NULL');
+      const [alumno_id, curso_id, sesion_id, fecha, estadoValue, observacion] = historical
+        ? [params[0], params[1], null, params[2], params[3], params[4]]
+        : params;
+      const existing = state.asistencias.find((row) => historical
+        ? row.alumno_id === alumno_id && row.curso_id === curso_id &&
+          row.fecha === fecha && row.sesion_id === null
+        : row.alumno_id === alumno_id && row.sesion_id === sesion_id);
       if (existing) return { rows: [], rowCount: 0 };
       if (!state.alumnos.has(alumno_id) || !state.cursos.has(curso_id) ||
-          !state.sesiones.has(sesion_id)) {
+          (!historical && !state.sesiones.has(sesion_id))) {
         const error = new Error('foreign key detail must not reach API');
         error.code = '23503';
         throw error;
@@ -363,6 +390,105 @@ test('requiere fecha_registro válida y dentro del horario de la sesión', async
     assert.equal(response.json.success, false);
     assert.equal(response.json.items[0].success, false);
   }
+
+  const malformedDate = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [validSyncItem({ fecha: '2026-02-30' })] },
+  });
+  assert.equal(malformedDate.json.items[0].success, false);
+});
+
+test('sincroniza asistencias históricas sin inventar una sesión', async () => {
+  const historicalValues = {
+    fecha: '2026-10-13',
+    fecha_registro: '2026-10-13T10:00:00.000Z',
+  };
+  const historical = validSyncItem({ ...historicalValues, sesion_id: null });
+  const { sesion_id, ...legacyPayloadWithoutSession } = validSyncItem({
+    ...historicalValues,
+    local_id: 11,
+    fecha_registro: '2026-10-13 10:00:00',
+  });
+  const response = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [historical, legacyPayloadWithoutSession] },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.json.success, true);
+  assert.equal(response.json.items[0].success, true);
+  assert.equal(response.json.items[0].sesion_id, null);
+  assert.equal(state.asistencias[0].sesion_id, null);
+  assert.equal(response.json.items[1].success, true);
+});
+
+test('rechaza la ausencia de sesión para asistencias actuales o con sesión registrada', async () => {
+  const currentDay = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [validSyncItem({ sesion_id: null })] },
+  });
+  assert.equal(currentDay.json.items[0].success, false);
+
+  state.sesiones.set(11, {
+    ...sessionFixture(),
+    id: 11,
+    fecha: '2026-10-13',
+  });
+  const historicalDateWithSession = await request('/sincronizar', {
+    method: 'POST',
+    body: {
+      items: [validSyncItem({
+        fecha: '2026-10-13',
+        fecha_registro: '2026-10-13T10:00:00.000Z',
+        sesion_id: null,
+      })],
+    },
+  });
+  assert.equal(historicalDateWithSession.json.items[0].success, false);
+  assert.equal(state.asistencias.length, 0);
+});
+
+test('confirma duplicados históricos coincidentes y rechaza datos distintos sin sobrescribir', async () => {
+  const historical = {
+    fecha: '2026-10-13',
+    fecha_registro: '2026-10-13T10:00:00.000Z',
+  };
+  const initial = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [validSyncItem({ ...historical, sesion_id: null })] },
+  });
+  const duplicate = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [validSyncItem({ ...historical, local_id: 11, sesion_id: null })] },
+  });
+  const conflict = await request('/sincronizar', {
+    method: 'POST',
+    body: { items: [validSyncItem({ ...historical, local_id: 12, sesion_id: null, estado: 'AUSENTE' })] },
+  });
+
+  assert.equal(initial.json.items[0].success, true);
+  assert.equal(duplicate.json.items[0].success, true);
+  assert.equal(duplicate.json.items[0].remoto_id, initial.json.items[0].remoto_id);
+  assert.equal(conflict.json.success, false);
+  assert.equal(conflict.json.items[0].success, false);
+  assert.equal(state.asistencias.length, 1);
+  assert.equal(state.asistencias[0].estado, 'PRESENTE');
+});
+
+test('no modifica una asistencia histórica ya asociada a ID remoto', async () => {
+  const response = await request('/sincronizar', {
+    method: 'POST',
+    body: {
+      items: [validSyncItem({
+        fecha: '2026-10-13',
+        fecha_registro: '2026-10-13T10:00:00.000Z',
+        sesion_id: null,
+        remoto_id: 5,
+      })],
+    },
+  });
+  assert.equal(response.json.success, false);
+  assert.equal(response.json.items[0].success, false);
+  assert.equal(state.asistencias.length, 0);
 });
 
 test('la sincronización idempotente no sobrescribe duplicados distintos', async () => {
