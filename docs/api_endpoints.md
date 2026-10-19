@@ -128,11 +128,12 @@ Elimina al estudiante y sus registros de asistencia.
 Consulta asistencias con filtros opcionales cruzados:
 - `curso_id` (numérico)
 - `alumno_id` (numérico)
+- `sesion_id` (numérico)
 - `fecha` (YYYY-MM-DD)
 - `estado` (PRESENTE | TARDANZA | AUSENTE)
 - `q` (búsqueda de texto)
 
-Los filtros `curso_id`, `alumno_id`, `fecha` y `estado`, cuando se envían, deben ser válidos. Los filtros inválidos responden HTTP 400 y no se ignoran.
+Los filtros `curso_id`, `alumno_id`, `sesion_id`, `fecha` y `estado`, cuando se envían, deben ser válidos. Los filtros inválidos responden HTTP 400 y no se ignoran.
 
 **Respuesta Exitosa (HTTP 200):**
 ```json
@@ -148,6 +149,8 @@ Los filtros `curso_id`, `alumno_id`, `fecha` y `estado`, cuando se envían, debe
       "alumno_apellidos": "Verenzuela López",
       "alumno_nombre_completo": "Verenzuela López, Alexander",
       "curso_id": 1,
+      "sesion_id": 3,
+      "sesion_nombre": "Clase",
       "curso_codigo": "DAM-501",
       "curso_nombre": "Desarrollo de Aplicaciones Móviles I",
       "fecha": "2026-10-14",
@@ -166,6 +169,7 @@ Registra una asistencia individual.
 {
   "alumno_id": 1,
   "curso_id": 1,
+  "sesion_id": 3,
   "fecha": "2026-10-14",
   "estado": "PRESENTE",
   "observacion": "Participó en laboratorio"
@@ -174,18 +178,21 @@ Registra una asistencia individual.
 - **HTTP 201:** Asistencia registrada.
 - **HTTP 400:** Datos, identificadores, fecha o estado inválidos.
 - **HTTP 404:** El alumno o curso indicado no existe.
-- **HTTP 409 Conflict:** Ya existe asistencia para ese estudiante en la misma sesión/fecha (evita duplicados).
+- **HTTP 403:** La sesión no existe, no corresponde al curso y fecha, o no está abierta y dentro del horario.
+- **HTTP 409 Conflict:** Ya existe asistencia para ese estudiante en la misma sesión (no se sobrescribe).
 
 ### `PUT /api/asistencias/:id`
-Modifica el estado, fecha u observación de una asistencia.
+Modifica el estado u observación de una asistencia vinculada a una sesión activa. La fecha no se puede cambiar.
 - **HTTP 200:** Asistencia modificada.
+- **HTTP 403:** La sesión está cerrada/vencida o la asistencia histórica no tiene sesión.
 
 ### `DELETE /api/asistencias/:id`
-Elimina el registro de asistencia especificado.
+Elimina el registro de asistencia especificado si pertenece a una sesión activa.
 - **HTTP 200:** Eliminado exitosamente.
+- **HTTP 403:** La sesión está cerrada/vencida o la asistencia histórica no tiene sesión.
 
 ### `POST /api/asistencias/sincronizar` (Sincronización en Lote para Móvil)
-Recibe un arreglo con múltiples registros tomados offline en SQLite y los sincroniza mediante una operación UPSERT segura (`ON CONFLICT (alumno_id, curso_id, fecha) DO UPDATE`).
+Recibe un arreglo con registros offline asociados a una sesión. Cada registro debe incluir `sesion_id` y `fecha_registro`; la hora de registro debe estar dentro del horario de esa sesión y coincidir con su curso y fecha. Las nuevas asistencias usan `ON CONFLICT (alumno_id, sesion_id) DO NOTHING`: una asistencia ya existente se confirma solo si sus datos coinciden, nunca se sobrescribe con datos distintos. Si se envía `remoto_id`, se trata como una modificación y solo se acepta con la sesión activa y si el registro remoto coincide.
 
 **Body:**
 ```json
@@ -195,7 +202,9 @@ Recibe un arreglo con múltiples registros tomados offline en SQLite y los sincr
       "local_id": 101,
       "alumno_id": 1,
       "curso_id": 1,
+      "sesion_id": 3,
       "fecha": "2026-10-14",
+      "fecha_registro": "2026-10-14T10:30:00.000Z",
       "estado": "PRESENTE",
       "observacion": "Registro offline sincronizado"
     }
@@ -213,6 +222,7 @@ Recibe un arreglo con múltiples registros tomados offline en SQLite y los sincr
     {
       "local_id": 101,
       "remoto_id": 19,
+      "sesion_id": 3,
       "fecha": "2026-10-14",
       "success": true,
       "message": "Sincronizado correctamente"
@@ -221,7 +231,7 @@ Recibe un arreglo con múltiples registros tomados offline en SQLite y los sincr
 }
 ```
 
-`success` es `false` si uno o más elementos no pudieron sincronizarse. En ese caso, `items` conserva un resultado individual por entrada y los elementos válidos se procesan igualmente. Cada elemento requiere `local_id` positivo, identificadores positivos de alumno y curso, fecha válida `YYYY-MM-DD` y estado admitido. Si `items` falta, no es un arreglo o está vacío, la API responde HTTP 400.
+`success` es `false` si uno o más elementos no pudieron sincronizarse. En ese caso, `items` conserva un resultado individual por entrada y los elementos válidos se procesan igualmente. Cada elemento requiere `local_id` positivo, identificadores positivos de alumno, curso y sesión, fecha válida `YYYY-MM-DD`, estado admitido y `fecha_registro` válida dentro del horario de la sesión. Si `items` falta, no es un arreglo o está vacío, la API responde HTTP 400.
 
 ---
 

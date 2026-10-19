@@ -40,8 +40,8 @@ graph TD
 2. La aplicación consulta `GET /api/cursos` y `GET /api/alumnos`.
 3. El docente marca la asistencia de la clase (Presente, Tardanza o Ausente).
 4. **Persistencia Local Primero:** El registro se inserta en SQLite (`DatabaseHelper.insertarAsistencia`) con estado `sincronizado = 0`. Esto garantiza que un fallo de red repentino nunca pierda la toma de asistencia.
-5. Inmediatamente, `ApiClient` envía el registro al endpoint `POST /api/asistencias/sincronizar`.
-6. PostgreSQL confirma la transacción y retorna el `remoto_id`.
+5. Inmediatamente, `ApiClient` envía el registro al endpoint `POST /api/asistencias/sincronizar`, incluyendo `sesion_id` y `fecha_registro`.
+6. El servidor comprueba que el curso, la fecha y la hora de registro correspondan a la sesión, y retorna el `remoto_id` por registro confirmado.
 7. La aplicación actualiza el registro local a `sincronizado = 1` y almacena el `remoto_id`.
 8. Se notifica al docente el éxito de la operación.
 
@@ -64,9 +64,9 @@ sequenceDiagram
     App->>SQLite: INSERT asistencias (sincronizado = 0)
     SQLite-->>App: ID local generado
     App->>API: POST /api/asistencias/sincronizar (Lote)
-    API->>PG: INSERT / UPSERT asistencias
+    API->>PG: INSERT asistencias por sesion_id (no sobrescribe conflictos)
     PG-->>API: Confirmación e IDs remotos
-    API-->>App: HTTP 200 { total_sincronizados: N }
+    API-->>App: HTTP 200 { success, total_sincronizados: N, items[] }
     App->>SQLite: UPDATE sincronizado = 1, remoto_id
     App-->>Docente: Muestra diálogo de éxito
 ```
@@ -90,8 +90,8 @@ sequenceDiagram
 1. Cuando el dispositivo vuelve a tener conectividad, el docente ingresa a **"Gestión Local SQLite"** o a **"Sincronizar Datos"** en la pantalla principal.
 2. La aplicación invoca `dbHelper.listarPendientesSincronizacion()`, obteniendo únicamente aquellos registros con `sincronizado == 0`.
 3. Envía el paquete JSON a `POST /api/asistencias/sincronizar`.
-4. El servidor realiza un UPSERT seguro (`ON CONFLICT (alumno_id, curso_id, fecha) DO UPDATE`), evitando cualquier duplicación involuntaria.
-5. El servidor responde con los identificadores asignados.
+4. El servidor valida la sesión y `fecha_registro`; una asistencia duplicada se confirma solo si coincide con el registro local, sin sobrescribir datos distintos.
+5. El servidor responde con resultado individual e identificador remoto para cada elemento.
 6. La base de datos SQLite se actualiza localmente marcando cada registro con `sincronizado = 1`.
 7. El contador de pendientes desciende a 0.
 
@@ -99,5 +99,5 @@ sequenceDiagram
 
 ## 5. Flujo 4: Resolución de Modificaciones y Eliminaciones
 
-- **Modificación en SQLite:** Cuando un registro local se modifica (por ejemplo, justificación tardía de una inasistencia), su bandera pasa a `sincronizado = 0`. Al ejecutarse la sincronización, el servidor actualiza la fila correspondiente en PostgreSQL mediante la clave compuesta única `(alumno_id, curso_id, fecha)`.
+- **Modificación en SQLite:** Cuando un registro local se modifica (por ejemplo, justificación tardía de una inasistencia), su bandera pasa a `sincronizado = 0`. Al ejecutarse la sincronización, el servidor actualiza la fila correspondiente en PostgreSQL mediante `remoto_id`, comprobando alumno, curso, sesión y fecha, y solo mientras la sesión siga activa.
 - **Eliminación:** Los registros locales pueden eliminarse en SQLite mediante confirmación. En el portal administrativo web, los administradores pueden gestionar, modificar o eliminar registros directamente en la base de datos central.

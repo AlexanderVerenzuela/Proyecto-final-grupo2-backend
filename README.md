@@ -72,6 +72,12 @@ Proyecto-final-grupo2-backend/
    psql -U postgres -d asiste_plus -f "database/seeds.sql"
    ```
 
+`database/schema.sql` prepara una base nueva y elimina las tablas existentes antes de crearlas. Para una instalación que ya contiene datos, aplica la migración aditiva de sesiones en lugar de volver a ejecutar el esquema:
+```bash
+psql -U postgres -d asiste_plus -f "database/migrations/20261018_add_attendance_sessions.sql"
+```
+La migración conserva las asistencias históricas asignándoles `sesion_id = NULL`; estas no se pueden modificar ni eliminar mediante los endpoints que requieren una sesión activa.
+
 ---
 
 ### 2. Configurar y Ejecutar el Servidor Backend

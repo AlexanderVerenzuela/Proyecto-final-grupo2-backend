@@ -7,6 +7,7 @@ const alumnosRoutes = require('./routes/alumnos');
 const cursosRoutes = require('./routes/cursos');
 const asistenciasRoutes = require('./routes/asistencias');
 const estadisticasRoutes = require('./routes/estadisticas');
+const sesionesRoutes = require('./routes/sesiones');
 const db = require('./db');
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/alumnos', alumnosRoutes);
 app.use('/api/cursos', cursosRoutes);
 app.use('/api/asistencias', asistenciasRoutes);
 app.use('/api/estadisticas', estadisticasRoutes);
+app.use('/api/sesiones', sesionesRoutes);
 
 // Servir portal web administrativo estático si existe
 const webAdminPath = path.join(__dirname, '..', 'web-admin');

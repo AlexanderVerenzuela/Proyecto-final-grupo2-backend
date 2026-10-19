@@ -6,6 +6,7 @@
 
 -- 1. Eliminar tablas previas si existen (orden de dependencias)
 DROP TABLE IF EXISTS asistencias CASCADE;
+DROP TABLE IF EXISTS sesiones_asistencia CASCADE;
 DROP TABLE IF EXISTS cursos CASCADE;
 DROP TABLE IF EXISTS alumnos CASCADE;
 
@@ -34,11 +35,31 @@ CREATE TABLE cursos (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Tabla ASISTENCIAS
+-- 4. Tabla SESIONES DE ASISTENCIA
+CREATE TABLE sesiones_asistencia (
+    id SERIAL PRIMARY KEY,
+    curso_id INT NOT NULL,
+    fecha DATE NOT NULL,
+    nombre VARCHAR(100) NOT NULL DEFAULT 'Clase',
+    inicio_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fin_at TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '3 hours'),
+    estado VARCHAR(20) NOT NULL DEFAULT 'ABIERTA',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sesion_asistencia_curso FOREIGN KEY (curso_id)
+        REFERENCES cursos(id) ON DELETE CASCADE,
+    CONSTRAINT chk_sesion_asistencia_estado CHECK (estado IN ('ABIERTA', 'CERRADA')),
+    CONSTRAINT chk_sesion_asistencia_horario CHECK (fin_at > inicio_at)
+);
+
+CREATE INDEX idx_sesiones_asistencia_curso_fecha
+    ON sesiones_asistencia(curso_id, fecha);
+
+-- 5. Tabla ASISTENCIAS
 CREATE TABLE asistencias (
     id SERIAL PRIMARY KEY,
     alumno_id INT NOT NULL,
     curso_id INT NOT NULL,
+    sesion_id INT,
     fecha DATE NOT NULL,
     estado VARCHAR(20) NOT NULL,
     observacion TEXT,
@@ -51,17 +72,19 @@ CREATE TABLE asistencias (
         REFERENCES alumnos(id) ON DELETE CASCADE,
     CONSTRAINT fk_asistencia_curso FOREIGN KEY (curso_id) 
         REFERENCES cursos(id) ON DELETE CASCADE,
+    CONSTRAINT fk_asistencia_sesion FOREIGN KEY (sesion_id)
+        REFERENCES sesiones_asistencia(id) ON DELETE SET NULL,
         
     -- Restricción de negocio: valores permitidos para estado
     CONSTRAINT chk_asistencia_estado CHECK (
         UPPER(estado) IN ('PRESENTE', 'AUSENTE', 'TARDANZA')
     ),
     
-    -- Restricción de unicidad: un estudiante no puede tener doble registro en el mismo curso y fecha
-    CONSTRAINT uq_asistencia_alumno_curso_fecha UNIQUE (alumno_id, curso_id, fecha)
+    -- Una asistencia por estudiante en cada sesión; NULL conserva registros históricos.
+    CONSTRAINT uq_asistencia_alumno_sesion UNIQUE (alumno_id, sesion_id)
 );
 
--- 5. Índices para optimizar búsquedas y reportes
+-- 6. Índices para optimizar búsquedas y reportes
 CREATE INDEX idx_asistencias_alumno ON asistencias(alumno_id);
 CREATE INDEX idx_asistencias_curso ON asistencias(curso_id);
 CREATE INDEX idx_asistencias_fecha ON asistencias(fecha);
