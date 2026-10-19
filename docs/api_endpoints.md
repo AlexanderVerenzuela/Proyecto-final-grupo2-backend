@@ -132,6 +132,8 @@ Consulta asistencias con filtros opcionales cruzados:
 - `estado` (PRESENTE | TARDANZA | AUSENTE)
 - `q` (búsqueda de texto)
 
+Los filtros `curso_id`, `alumno_id`, `fecha` y `estado`, cuando se envían, deben ser válidos. Los filtros inválidos responden HTTP 400 y no se ignoran.
+
 **Respuesta Exitosa (HTTP 200):**
 ```json
 {
@@ -170,7 +172,8 @@ Registra una asistencia individual.
 }
 ```
 - **HTTP 201:** Asistencia registrada.
-- **HTTP 400:** Datos faltantes o estado inválido.
+- **HTTP 400:** Datos, identificadores, fecha o estado inválidos.
+- **HTTP 404:** El alumno o curso indicado no existe.
 - **HTTP 409 Conflict:** Ya existe asistencia para ese estudiante en la misma sesión/fecha (evita duplicados).
 
 ### `PUT /api/asistencias/:id`
@@ -217,6 +220,8 @@ Recibe un arreglo con múltiples registros tomados offline en SQLite y los sincr
   ]
 }
 ```
+
+`success` es `false` si uno o más elementos no pudieron sincronizarse. En ese caso, `items` conserva un resultado individual por entrada y los elementos válidos se procesan igualmente. Cada elemento requiere `local_id` positivo, identificadores positivos de alumno y curso, fecha válida `YYYY-MM-DD` y estado admitido. Si `items` falta, no es un arreglo o está vacío, la API responde HTTP 400.
 
 ---
 

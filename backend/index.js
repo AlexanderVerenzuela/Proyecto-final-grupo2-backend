@@ -36,10 +36,10 @@ app.get('/api/health', async (req, res) => {
       nombre_bd: dbTest.rows[0].base_datos,
     });
   } catch (error) {
+    console.error('Error al comprobar la conexión con la base de datos:', error);
     res.status(500).json({
       status: 'ERROR',
       mensaje: 'Fallo al conectar con la base de datos',
-      error: error.message,
     });
   }
 });
@@ -70,10 +70,15 @@ app.use((req, res) => {
 // Manejo global de errores
 app.use((err, req, res, next) => {
   console.error('Error no capturado:', err);
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      success: false,
+      message: 'El cuerpo de la solicitud contiene JSON inválido',
+    });
+  }
   res.status(500).json({
     success: false,
     message: 'Error interno en el servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
   });
 });
 

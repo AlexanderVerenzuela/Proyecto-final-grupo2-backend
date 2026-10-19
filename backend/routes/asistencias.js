@@ -2,10 +2,31 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
+const MAX_POSTGRES_INT = 2147483647;
+
+const esObjeto = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const normalizarId = (value) => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !/^[0-9]+$/.test(value)) return null;
+
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 && id <= MAX_POSTGRES_INT ? id : null;
+};
+
+const esFechaValida = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  if (Number(value.slice(0, 4)) < 1) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const esObservacionValida = (value) => value === undefined || value === null || typeof value === 'string';
+
 // Función auxiliar para normalizar estado
 const normalizarEstado = (estado) => {
-  if (!estado) return null;
-  const upper = estado.toString().trim().toUpperCase();
+  if (typeof estado !== 'string') return null;
+  const upper = estado.trim().toUpperCase();
   if (['PRESENTE', 'AUSENTE', 'TARDANZA'].includes(upper)) {
     return upper;
   }
@@ -16,6 +37,19 @@ const normalizarEstado = (estado) => {
 router.get('/', async (req, res) => {
   try {
     const { curso_id, alumno_id, fecha, estado, q } = req.query;
+    const cursoId = curso_id === undefined ? null : normalizarId(curso_id);
+    const alumnoId = alumno_id === undefined ? null : normalizarId(alumno_id);
+
+    if ((curso_id !== undefined && cursoId === null) ||
+        (alumno_id !== undefined && alumnoId === null)) {
+      return res.status(400).json({ success: false, message: 'curso_id y alumno_id deben ser enteros positivos válidos' });
+    }
+    if (fecha !== undefined && !esFechaValida(fecha)) {
+      return res.status(400).json({ success: false, message: 'fecha debe tener formato YYYY-MM-DD y ser una fecha válida' });
+    }
+    if (estado !== undefined && !normalizarEstado(estado)) {
+      return res.status(400).json({ success: false, message: 'El estado debe ser PRESENTE, AUSENTE o TARDANZA' });
+    }
 
     let query = `
       SELECT 
@@ -43,27 +77,25 @@ router.get('/', async (req, res) => {
     `;
     const params = [];
 
-    if (curso_id) {
-      params.push(parseInt(curso_id, 10));
+    if (curso_id !== undefined) {
+      params.push(cursoId);
       query += ` AND a.curso_id = $${params.length}`;
     }
 
-    if (alumno_id) {
-      params.push(parseInt(alumno_id, 10));
+    if (alumno_id !== undefined) {
+      params.push(alumnoId);
       query += ` AND a.alumno_id = $${params.length}`;
     }
 
-    if (fecha) {
-      params.push(fecha.trim());
+    if (fecha !== undefined) {
+      params.push(fecha);
       query += ` AND a.fecha = $${params.length}::DATE`;
     }
 
-    if (estado) {
+    if (estado !== undefined) {
       const norm = normalizarEstado(estado);
-      if (norm) {
-        params.push(norm);
-        query += ` AND a.estado = $${params.length}`;
-      }
+      params.push(norm);
+      query += ` AND a.estado = $${params.length}`;
     }
 
     if (q) {
@@ -88,7 +120,10 @@ router.get('/', async (req, res) => {
 // GET /api/asistencias/:id - Obtener asistencia por ID
 router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = normalizarId(req.params.id);
+    if (id === null) {
+      return res.status(400).json({ success: false, message: 'El identificador de asistencia debe ser un entero positivo válido' });
+    }
     const query = `
       SELECT 
         a.id,
@@ -124,13 +159,24 @@ router.get('/:id', async (req, res) => {
 // POST /api/asistencias - Registrar una asistencia
 router.post('/', async (req, res) => {
   try {
-    const { alumno_id, curso_id, fecha, estado, observacion } = req.body;
-
-    if (!alumno_id || !curso_id || !fecha || !estado) {
+    if (!esObjeto(req.body)) {
       return res.status(400).json({
         success: false,
-        message: 'alumno_id, curso_id, fecha y estado son campos obligatorios',
+        message: 'El cuerpo de la solicitud debe ser un objeto JSON',
       });
+    }
+
+    const { alumno_id, curso_id, fecha, estado, observacion } = req.body;
+    const alumnoId = normalizarId(alumno_id);
+    const cursoId = normalizarId(curso_id);
+    if (alumnoId === null || cursoId === null || !esFechaValida(fecha) || estado === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'alumno_id, curso_id, fecha y estado son obligatorios y deben tener un formato válido',
+      });
+    }
+    if (!esObservacionValida(observacion)) {
+      return res.status(400).json({ success: false, message: 'observacion debe ser una cadena de texto o null' });
     }
 
     const estadoNorm = normalizarEstado(estado);
@@ -142,21 +188,21 @@ router.post('/', async (req, res) => {
     }
 
     // Validar que el alumno existe
-    const alumnoCheck = await db.query('SELECT id, nombres, apellidos FROM alumnos WHERE id = $1', [alumno_id]);
+    const alumnoCheck = await db.query('SELECT id, nombres, apellidos FROM alumnos WHERE id = $1', [alumnoId]);
     if (alumnoCheck.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'El alumno especificado no existe' });
+      return res.status(404).json({ success: false, message: 'El alumno especificado no existe' });
     }
 
     // Validar que el curso existe
-    const cursoCheck = await db.query('SELECT id, nombre FROM cursos WHERE id = $1', [curso_id]);
+    const cursoCheck = await db.query('SELECT id, nombre FROM cursos WHERE id = $1', [cursoId]);
     if (cursoCheck.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'El curso especificado no existe' });
+      return res.status(404).json({ success: false, message: 'El curso especificado no existe' });
     }
 
     // Verificar si ya existe asistencia para esa fecha y sesión
     const duplicate = await db.query(
       'SELECT id FROM asistencias WHERE alumno_id = $1 AND curso_id = $2 AND fecha = $3::DATE',
-      [alumno_id, curso_id, fecha]
+      [alumnoId, cursoId, fecha]
     );
 
     if (duplicate.rows.length > 0) {
@@ -171,7 +217,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO asistencias (alumno_id, curso_id, fecha, estado, observacion, sincronizado)
        VALUES ($1, $2, $3::DATE, $4, $5, TRUE)
        RETURNING id, alumno_id, curso_id, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha, estado, observacion, sincronizado, created_at`,
-      [alumno_id, curso_id, fecha, estadoNorm, observacion ? observacion.trim() : null]
+      [alumnoId, cursoId, fecha, estadoNorm, typeof observacion === 'string' ? observacion.trim() : null]
     );
 
     res.status(201).json({
@@ -181,6 +227,15 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al registrar asistencia:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'Ya existe un registro de asistencia para este alumno en este curso y fecha',
+      });
+    }
+    if (error.code === '23503') {
+      return res.status(404).json({ success: false, message: 'El alumno o curso especificado no existe' });
+    }
     res.status(500).json({ success: false, message: 'Error interno al registrar asistencia' });
   }
 });
@@ -188,8 +243,26 @@ router.post('/', async (req, res) => {
 // PUT /api/asistencias/:id - Modificar asistencia
 router.put('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = normalizarId(req.params.id);
+    if (id === null) {
+      return res.status(400).json({ success: false, message: 'El identificador de asistencia debe ser un entero positivo válido' });
+    }
+    if (!esObjeto(req.body)) {
+      return res.status(400).json({ success: false, message: 'El cuerpo de la solicitud debe ser un objeto JSON' });
+    }
     const { estado, observacion, fecha } = req.body;
+    if (estado === undefined && observacion === undefined && fecha === undefined) {
+      return res.status(400).json({ success: false, message: 'Debe proporcionar estado, observacion o fecha para actualizar' });
+    }
+    if (estado !== undefined && !normalizarEstado(estado)) {
+      return res.status(400).json({ success: false, message: 'El estado debe ser PRESENTE, AUSENTE o TARDANZA' });
+    }
+    if (fecha !== undefined && !esFechaValida(fecha)) {
+      return res.status(400).json({ success: false, message: 'fecha debe tener formato YYYY-MM-DD y ser una fecha válida' });
+    }
+    if (observacion !== undefined && !esObservacionValida(observacion)) {
+      return res.status(400).json({ success: false, message: 'observacion debe ser una cadena de texto o null' });
+    }
 
     const check = await db.query('SELECT * FROM asistencias WHERE id = $1', [id]);
     if (check.rows.length === 0) {
@@ -208,10 +281,10 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    const fechaNueva = fecha ? fecha : current.fecha;
+    const fechaNueva = fecha !== undefined ? fecha : current.fecha;
 
     // Si cambió la fecha, validar unicidad
-    if (fecha && fecha !== current.fecha) {
+    if (fecha !== undefined && fecha !== current.fecha) {
       const dup = await db.query(
         'SELECT id FROM asistencias WHERE alumno_id = $1 AND curso_id = $2 AND fecha = $3::DATE AND id <> $4',
         [current.alumno_id, current.curso_id, fechaNueva, id]
@@ -239,6 +312,12 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error al modificar asistencia:', error);
+    if (error.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Ya existe un registro para esa nueva fecha' });
+    }
+    if (error.code === '23503') {
+      return res.status(404).json({ success: false, message: 'El alumno o curso especificado no existe' });
+    }
     res.status(500).json({ success: false, message: 'Error al modificar asistencia' });
   }
 });
@@ -246,7 +325,10 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/asistencias/:id - Eliminar asistencia
 router.delete('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = normalizarId(req.params.id);
+    if (id === null) {
+      return res.status(400).json({ success: false, message: 'El identificador de asistencia debe ser un entero positivo válido' });
+    }
     const check = await db.query('SELECT id FROM asistencias WHERE id = $1', [id]);
     if (check.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Asistencia no encontrada' });
@@ -266,7 +348,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/asistencias/sincronizar - Sincronización masiva desde app móvil
 router.post('/sincronizar', async (req, res) => {
   try {
-    const { items } = req.body;
+    const items = esObjeto(req.body) ? req.body.items : undefined;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -277,19 +359,45 @@ router.post('/sincronizar', async (req, res) => {
     const resultados = [];
 
     for (const item of items) {
-      const { local_id, alumno_id, curso_id, fecha, estado, observacion } = item;
-      const estadoNorm = normalizarEstado(estado);
-
-      if (!alumno_id || !curso_id || !fecha || !estadoNorm) {
+      const local_id = esObjeto(item) ? item.local_id : undefined;
+      if (!esObjeto(item)) {
         resultados.push({
           local_id,
           success: false,
-          message: 'Datos incompletos o estado inválido',
+          message: 'Cada elemento debe ser un objeto JSON válido',
+        });
+        continue;
+      }
+
+      const { alumno_id, curso_id, fecha, estado, observacion } = item;
+      const alumnoId = normalizarId(alumno_id);
+      const cursoId = normalizarId(curso_id);
+      const estadoNorm = normalizarEstado(estado);
+      const validLocalId = typeof local_id === 'number' &&
+        Number.isSafeInteger(local_id) && local_id > 0;
+
+      if (!validLocalId || alumnoId === null || cursoId === null ||
+          !esFechaValida(fecha) || !estadoNorm || !esObservacionValida(observacion)) {
+        resultados.push({
+          local_id,
+          success: false,
+          message: 'Datos incompletos o inválidos',
         });
         continue;
       }
 
       try {
+        const alumnoCheck = await db.query('SELECT id FROM alumnos WHERE id = $1', [alumnoId]);
+        if (alumnoCheck.rows.length === 0) {
+          resultados.push({ local_id, success: false, message: 'El alumno especificado no existe' });
+          continue;
+        }
+        const cursoCheck = await db.query('SELECT id FROM cursos WHERE id = $1', [cursoId]);
+        if (cursoCheck.rows.length === 0) {
+          resultados.push({ local_id, success: false, message: 'El curso especificado no existe' });
+          continue;
+        }
+
         // UPSERT usando ON CONFLICT
         const upsertQuery = `
           INSERT INTO asistencias (alumno_id, curso_id, fecha, estado, observacion, sincronizado)
@@ -303,11 +411,11 @@ router.post('/sincronizar', async (req, res) => {
           RETURNING id, TO_CHAR(fecha, 'YYYY-MM-DD') AS fecha;
         `;
         const resUpsert = await db.query(upsertQuery, [
-          alumno_id,
-          curso_id,
+          alumnoId,
+          cursoId,
           fecha,
           estadoNorm,
-          observacion || null,
+          typeof observacion === 'string' ? observacion : null,
         ]);
 
         resultados.push({
@@ -318,11 +426,15 @@ router.post('/sincronizar', async (req, res) => {
           message: 'Sincronizado correctamente',
         });
       } catch (err) {
-        console.error('Error al sincronizar item:', item, err);
+        console.error('Error al sincronizar asistencia:', err);
         resultados.push({
           local_id,
           success: false,
-          message: err.message || 'Error en inserción',
+          message: err.code === '23503'
+            ? 'El alumno o curso especificado no existe'
+            : err.code === '23505'
+              ? 'Conflicto al sincronizar la asistencia'
+              : 'Error interno al sincronizar la asistencia',
         });
       }
     }
@@ -330,7 +442,7 @@ router.post('/sincronizar', async (req, res) => {
     const sincronizadosOk = resultados.filter((r) => r.success).length;
 
     res.json({
-      success: true,
+      success: sincronizadosOk === items.length,
       total_procesados: items.length,
       total_sincronizados: sincronizadosOk,
       items: resultados,
